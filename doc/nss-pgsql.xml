@@ -1,0 +1,433 @@
+<?xml version="1.0"?>
+<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
+          "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd">
+<book id="nsspampgsql">
+  <bookinfo>
+    <title>NSS/PAM PgSQL</title>
+
+    <authorgroup>
+      <author>
+	<firstname>Jörg</firstname>
+	<surname>Wendland</surname>
+	<affiliation>
+	  <address>
+	    <email>jorgland@sol.wohnheim.uni-ulm.de</email>
+	  </address>
+	</affiliation>
+      </author>
+      <author>
+	<firstname>Bret</firstname>
+	<surname>Mogilefsky</surname>
+	<affiliation>
+	  <address>
+	    <email>mogul-sysauth-pgsql@gelatinous.com</email>
+	  </address>
+	</affiliation>
+      </author>
+      <author>
+	<firstname>Wichert</firstname>
+	<surname>Akkerman</surname>
+	<affiliation>
+	  <address>
+	    <email>wichert@wiggy.net</email>
+	  </address>
+	</affiliation>
+      </author>
+      <author>
+	<firstname>Christian</firstname>
+	<surname>Bayle</surname>
+	<affiliation>
+	  <address>
+	    <email>bayle@debian.org</email>
+	  </address>
+	</affiliation>
+      </author>
+	  <author>
+	<firstname>Russell</firstname>
+	<surname>Smith/surname>
+	<affiliation>
+	  <address>
+	    <email>mr-russ@pws.com.au</email>
+	  </address>
+	</affiliation>
+	  </author>								  
+    </authorgroup>
+
+    <copyright>
+      <year>2001</year>
+      <year>2004</year>
+      <year>2005</year>
+      <holder>Jörg Wendland</holder>
+      <holder>Wichert Akkerman</holder>
+	  <holder>Russell Smith</holder>
+    </copyright>
+
+    <legalnotice>
+      <para>
+	Permission is granted to copy, distribute and/or modify this document
+	under the terms of the GNU Free Documentation License, Version 1.1 or
+	any later version published by the Free Software Foundation. There
+	are no invariant sections. A copy of the license is included in the
+	section entitled "GNU Free Documentation License".
+      </para>
+    </legalnotice>
+  </bookinfo>
+
+  <preface id="preface">
+    <title>Preface</title>
+
+    <para>
+      This document covers setup and use of the Name Service Switch (NSS)
+      Module <filename>libnss-pgsql.so</filename>. Its purpose is replace the
+      flatfile user, group and shadow databases in <filename>/etc</filename> with a
+      relational database on a PostgreSQL server. It is highly configurable to
+      fit onto most existing databases.
+    </para>
+  </preface>
+
+  <toc/>
+
+  <chapter id="prerequisites">
+    <title>Prerequisites</title>
+
+    <para>
+      For installation instructions please see the files
+      <filename>README</filename> and <filename>INSTALL</filename> in the
+      source distribution.
+    </para>
+
+    <para>
+      To use this module you will need a PostgreSQL database containing some
+      sort of user account information. See <xref linkend="dbschema"/> for an
+      example database.
+    </para>
+  </chapter>
+
+  <chapter>
+    <title>Module and Database Setup</title>
+
+    <section id="dbstructure">
+      <title>required database structure</title>
+
+      <para>
+	To use this module with a database you will need at least three tables
+	in that database. One for account data (the information usually stored
+	in <filename>/etc/passwd</filename>), one for group data
+	(<filename>/etc/group</filename>) and another one storing information
+	about groupmembership (there is a m:n relation between passwd and group
+	so you need this weak entity). If you have an existing database you do
+	not want to modify you can use views or table expressions (see 
+	<xref linkend="conffile"/>), of course. You can also optionally store
+	shadow information (<filename>/etc/shadow</filename>) in the database
+	as well. Depending on your security requirements another table or view
+	may be needed.
+      </para>
+
+      <section id="tables">
+	<title>tables and fields</title>
+
+	<para>
+	  There have to be some required fields in those tables. They are
+	  described below.
+	</para>
+
+	<variablelist>
+	  <varlistentry>
+	    <term>passwd table (see <citerefentry>
+		<refentrytitle>getpwnam</refentrytitle>
+		<manvolnum>3</manvolnum></citerefentry>
+	      for more information)</term>
+	    <listitem>
+	      <itemizedlist>
+		<listitem>
+		  <para>login name</para>
+		</listitem>
+		<listitem>
+		  <para>password</para>
+		</listitem>
+		<listitem>
+		  <para>numerical user id (uid)</para>
+		</listitem>
+		<listitem>
+		  <para>numerical primary group id (gid)</para>
+		</listitem>
+		<listitem>
+		  <para>login shell</para>
+		</listitem>
+		<listitem>
+		  <para>description (gecos)</para>
+		</listitem>
+		<listitem>
+		  <para>home directory</para>
+		</listitem>
+	      </itemizedlist>
+	    </listitem>
+	  </varlistentry>
+
+	  <varlistentry>
+	    <term>group table (see <citerefentry>
+		<refentrytitle>getgrnam</refentrytitle>
+		<manvolnum>3</manvolnum></citerefentry>)</term>
+	    <listitem>
+	      <itemizedlist>
+		<listitem>
+		  <para>group name</para>
+		</listitem>
+		<listitem>
+		  <para>group password</para>
+		</listitem>
+		<listitem>
+		  <para>numerical group id (gid)</para>
+		</listitem>
+	      </itemizedlist>
+	    </listitem>
+	  </varlistentry>
+	</variablelist>
+
+	<para>
+	  An example database schema can be found in <xref
+	    linkend="dbschema"/>. See there for how to construct the
+	  groupmember table.
+	</para>
+      </section>
+    </section>
+  </chapter>
+
+  <chapter id="configuration">
+    <title>configuring the module</title>
+
+    <para>
+      Having a working database, you must write your configfile
+      <filename>/etc/nss-pgsql.conf</filename>. If you also want shadow
+	  support, you must write a second config file 
+	  <filename>/etc/nss-pgsql-root.conf</filename>
+	  These files have a simple syntax:
+    </para>
+
+    <informalexample>
+      <programlisting>
+LINE      := COMMENT | EMPTY | STATEMENT
+COMMENT   := '#' &lt;text&gt;
+EMPTY     := ''
+STATEMENT := KEYWORD '=' &lt;value&gt;
+</programlisting>
+    </informalexample>
+
+    <para>
+      With <command>KEYWORD</command> being one of the following (all are
+      required):
+    </para>
+
+    <variablelist>
+      <varlistentry>
+	<term>connectionstring</term>
+	<listitem>
+	  <para>The connection string to connect to the server. You can include any valid PostgreSQL options.</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term>getpwnam</term>
+	<listitem>
+	  <para>A query that returns passwd_name, passwd_passwd, passwd_gecos, passwd_dir, passwd_shell, passwd_uid, passwd_gid for a given username</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term>getpwuid</term>
+	<listitem>
+	  <para>A query that returns passwd_name, passwd_passwd, passwd_gecos, passwd_dir, passwd_shell, passwd_uid, passwd_gid for a given uid</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term>getgrnam</term>
+	<listitem>
+	  <para>A query that returns group_name, group_passwd, group_gid for a given group name</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term>getgrgid</term>
+	<listitem>
+	  <para>A query that returns group_name, group_passwd, group_gid for a given gid</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term>allusers</term>
+	<listitem>
+	  <para>A query that returns username, password, gecos, home_dir, shell, uid, primarygid for every user</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term>allgroups</term>
+	<listitem>
+	  <para>A query that returns group_name, group_passwd, group_gid for every group</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term>groups_dyn</term>
+	<listitem>
+	  <para>A query that returns a list of gid's a particular user is in. excluding their primary group.</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term>getgroupmembersbygid</term>
+	<listitem>
+	  <para>A query that returns a list of usernames for a given gid</para>
+	</listitem>
+      </varlistentry>
+	  
+      <varlistentry>
+	<term>shadowbyname</term>
+	<listitem>
+	  <para>A query returning shadow_name, shadow_passwd, shadow_lstchg, shadow_min, shadow_max, shadow_warn, shadow_inact, shadow_expire, shadow_flag
+	  	for a given username</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
+	<term>shadow</term>
+	<listitem>
+	  <para>A query returning shadow_name, shadow_passwd, shadow_lstchg, shadow_min, shadow_max, shadow_warn, shadow_inact, shadow_expire, shadow_flag
+	  	for all users</para>
+	</listitem>
+      </varlistentry>
+    </variablelist>
+  </chapter>
+  <chapter id="nss-setup">
+    <title>Name Service Switch Setup</title>
+
+    <caution>
+      <para>
+	You can do serious damage to your system if you do not know what you
+	are doing! If you are trying changes in the Name Service Switch for the
+	very first time, consider doing that in a chroot environment or a test
+	machine. Have at least an editor with
+	<filename>/etc/nsswitch.conf</filename> open to revert your changes
+	easily. You have been warned!
+      </para>
+    </caution>
+
+    <para>
+      Setting up the Name Service Switch is fairly easy, given a
+      working installation of the libnss-pgsql module. Just add an
+      entry <command>pgsql</command> the <command>passwd</command> and
+      <command>group</command> lines of
+      <filename>/etc/nsswitch.conf</filename>. You can tune the behaviour with
+      options between the entries to get a fully working system. Useful lines
+      in <filename>/etc/nsswitch.conf</filename> would look like these:
+    </para>
+
+    <informalexample>
+      <programlisting>
+passwd: files [SUCCESS=continue] pgsql
+group:  files [SUCCESS=continue] pgsql
+shadow:  files [SUCCESS=continue] pgsql
+</programlisting>
+    </informalexample>
+
+    <para>
+      This will make your libc look into the standard
+      <filename>passwd</filename> and <filename>group</filename> files first
+      and then use libnss-pgsql. The option
+      <command>[SUCCESS=continue]</command> ensures that all accounts or groups
+      are retrieved when using the iteration functions
+      <citerefentry>
+	<refentrytitle>getpwent</refentrytitle>
+	<manvolnum>3</manvolnum>
+      </citerefentry> and
+      <citerefentry>
+	<refentrytitle>getgrent</refentrytitle>
+	<manvolnum>3</manvolnum>
+      </citerefentry>.
+    </para>
+
+  </chapter>
+
+  <appendix id="appendix">
+    <title>Examples</title>
+
+    <example id="dbschema">
+      <title>Database schema</title>
+      <programlisting>
+-- Default table setup for nss-pgsql
+
+CREATE SEQUENCE group_id MINVALUE 1000 MAXVALUE 2147483647 NO CYCLE;
+CREATE SEQUENCE user_id MINVALUE 1000 MAXVALUE 2147483647 NO CYCLE;
+
+CREATE TABLE "group_table" (
+	"gid" int4 NOT NULL DEFAULT nextval('group_id'),
+	"groupname" character varying(16) NOT NULL,
+	"descr" character varying,
+	"passwd" character varying(20),
+	PRIMARY KEY ("gid")
+);
+
+CREATE TABLE "passwd_table" (
+	"username" character varying(64) NOT NULL,
+	"passwd" character varying(128) NOT NULL,
+	"uid" int4 NOT NULL DEFAULT nextval('user_id'),
+	"gid" int4 NOT NULL,
+	"gecos" character varying(128),
+	"homedir" character varying(256) NOT NULL,
+	"shell" character varying DEFAULT '/bin/bash' NOT NULL,
+	PRIMARY KEY ("username")
+);
+
+CREATE TABLE "usergroups" (
+	"gid" int4 NOT NULL,
+	"uid" int4 NOT NULL,
+	PRIMARY KEY ("gid", "uid"),
+	CONSTRAINT "ug_gid_fkey" FOREIGN KEY ("gid") REFERENCES "groups"("gid"),
+	CONSTRAINT "ug_uid_fkey" FOREIGN KEY ("uid") REFERENCES "accounts"("uid")
+);
+  
+CREATE TABLE "shadow_table" (
+ 	"username" character varying(64) NOT NULL,
+ 	"passwd" character varying(128) NOT NULL,
+ 	"lastchange" int4 NOT NULL,
+ 	"min" int4 NOT NULL,
+ 	"max" int4 NOT NULL,
+ 	"warn" int4 NOT NULL,
+ 	"inact" int4 NOT NULL,
+ 	"expire" int4 NOT NULL,
+ 	"flag" int4 NOT NULL,
+ 	PRIMARY KEY ("username")
+);
+</programlisting>
+    </example>
+
+    <example id="conffile">
+      <title>Configuration file</title>
+      <programlisting>
+connectionstring        = hostaddr=127.0.0.1 dbname=unix user=postgres password=XXX connect_timeout=1
+# you can use anything postgres accepts as table expression
+
+# Must return "usernames", 1 column, list
+getgroupmembersbygid    = SELECT username FROM passwd_table WHERE gid = $1
+# Must return passwd_name, passwd_passwd, passwd_gecos, passwd_dir, passwd_shell, passwd_uid, passwd_gid
+getpwnam        = SELECT username, passwd, gecos, homedir, shell, uid, gid FROM passwd_table WHERE username = $1
+# Must return passwd_name, passwd_passwd, passwd_gecos, passwd_dir, passwd_shell, passwd_uid, passwd_gid
+getpwuid        = SELECT username, passwd, gecos, homedir, shell, uid, gid FROM passwd_table WHERE uid = $1
+# All users
+allusers        = SELECT username, passwd, gecos, homedir, shell, uid, gid FROM passwd_table
+# Must return group_name, group_passwd, group_gid
+getgrnam        = SELECT groupname, passwd, gid FROM group_table WHERE groupname = $1
+# Must return group_name, group_passwd, group_gid
+getgrgid        = SELECT groupname, passwd, gid FROM group_table WHERE gid = $1
+# Must return gid.  %s MUST appear first for username match in where clause
+groups_dyn      = SELECT ug.gid FROM passwd_table JOIN usergroups USING (uid) where username = $1 and ug.gid <> $2
+allgroups       = SELECT groupname, passwd, gid  FROM group_table
+</programlisting>
+	<programlisting>
+# example configfile for PostgreSQL NSS module
+# this file must be readable for root only
+
+connectionstring        = hostaddr=127.0.0.1 dbname=unix user=postgres connect_timeout=1
+
+#Query in the following format
+#shadow_name, shadow_passwd, shadow_lstchg, shadow_min, shadow_max, shadow_warn, shadow_inact, shadow_expire, shadow_flag
+shadowbyname = SELECT * FROM shadow_table WHERE username = $1
+shadow = SELECT * FROM shadow_table
+</programlisting>
+    </example>
+  </appendix>
+</book>
+<!-- vi: sw=2
+  -->

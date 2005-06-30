@@ -1,0 +1,48 @@
+AC_INIT(src/interface.c)
+AM_INIT_AUTOMAKE(libnss-pgsql, 1.0.0)
+AM_CONFIG_HEADER(src/config.h)
+
+AC_PROG_CC
+AC_PROG_LD
+AC_PROG_INSTALL
+
+AC_HEADER_STDC
+AC_CHECK_HEADERS(unistd.h nss.h)
+
+AC_C_CONST
+
+AC_CHECK_LIB(pq, PQsetdbLogin)
+
+dnl check for OpenSSL
+AC_ARG_WITH(ssl, [  --with-ssl              Compile in SSL support],
+[       if test "$with_ssl" != "no"
+        then
+          if test "$with_ssl" != "yes"
+          then
+           LDFLAGS="$LDFLAGS -L$withval/lib"
+           CPPFLAGS="$CPPFLAGS -I$withval/include"
+          fi    
+          saved_LIBS="$LIBS"
+
+          AC_CHECK_LIB(crypto, X509_new,, AC_MSG_ERROR([Unable to find SSL library]))
+          AC_CHECK_LIB(ssl, SSL_new,, AC_MSG_ERROR([Unable to find SSL library]), -lcrypto)
+
+          AC_DEFINE(USE_SSL)
+          LIBS="$saved_LIBS"
+          MUTTLIBS="$MUTTLIBS -lssl -lcrypto"
+          need_ssl=yes
+
+          dnl Some systems avoid certain patent-encumbered SSL routines
+          AC_CHECK_HEADER(openssl/rc5.h,,AC_DEFINE(NO_RC5))
+          AC_CHECK_HEADER(openssl/idea.h,,AC_DEFINE(NO_IDEA))
+          AC_CHECK_HEADER(openssl/rsa.h,,AC_DEFINE(NO_RSA))
+        fi
+])
+AM_CONDITIONAL(USE_SSL, test x$need_ssl = xyes)
+
+AM_DISABLE_STATIC
+AM_ENABLE_SHARED([yes])
+AM_PROG_LIBTOOL
+
+rm -f conftest*
+AC_OUTPUT(Makefile src/Makefile)

@@ -1,0 +1,97 @@
+2005-06-30	Russell Smith <mr-russ@pws.com.au>
+	* Fixed another bug where a group did not appear to exist unless it
+	had members.
+
+	* New Version: 1.1.0
+
+2005-05-08	Russell Smith <mr-russ@pws.com.au>
+	* Buffer align the groups allocation size, I believe it fixes a crash on Sparc.
+
+	* Fixed bug where empty groups were not being displayed.
+
+2005-05-05	Russell Smith <mr-russ@pws.com.au>
+	* Cursor Must put back the last entry if we overflowed the buffer
+	  This caused some groups that were large to go missing
+
+2005-05-04	Russell Smith <mr-russ@pws.com.au>
+	* Now returns the correct ERRNO for buffer too small.
+
+	* Use PQexecParams to stop sql injections where appropriate
+
+	* Attempted some documentation updated
+
+	* Fixed issue where config file would not reopen in a different mode
+
+	* Check to see if we are actually in a transaction before COMMIT, (sudo)
+
+	* New Version: 1.0.2
+
+2005-02-21  Russell Smith <mr-russ@pws.com.au>
+	* Corrected shadow auth, where an interface function was
+	  missing.
+
+	* Documentation Updates, example configuration is better
+
+2004-10-01  Russell Smith <mr-russ@pws.com.au>
+
+	* changed configuration file to have queries of any form
+
+	* Merged in shadow patch with adjustments
+
+	* Made changed to ensure correct operation with newer glibc
+
+	* New Version: 0.9.9
+
+2001-10-22  Joerg Wendland  <jorgland@sol.wohnheim.uni-ulm.de>
+
+	* added documentation and database example
+
+	* changes to debian packaging (see debian/changelog)
+
+	* New Version: 1.0.0
+
+2001-10-04  Joerg Wendland  <jorgland@sol.wohnheim.uni-ulm.de>
+
+	* fixed SQL statement in backend/initgroups_dyn()
+
+	* filled README
+
+2001-09-30  Bret Mogilefsky  <mogul-sysauth-pgsql@gelatinous.com>
+
+	* made config file parsing much more robust; improper
+	handling of sscanf was causing many hard-to-debug crashes when
+	config files contained blank lines.  changed back to -O2 from -g
+	
+	* complain when config file contains a line that's not understood
+	
+	* plugged MANY leaks
+
+	* now _only_ malloc for config directives, or when necessary
+	(sql_escape); should be much faster
+	
+	* added atexit() calls to do db, cfg cleanup
+	
+	* removed unused functions
+	
+	* print_err made more usable and added print_msg, which D() now uses
+	
+	
+2001-09-20  Bret Mogilefsky  <mogul-sysauth-pgsql@gelatinous.com>
+
+	* added debug messages =)
+
+	* added initgroups_dyn(); which gives massive speedup to glibc
+	initgroups() call
+
+	* fixed some leaks
+
+	* fixed use of stale pointers
+	
+	
+2001-08-27  Joerg Wendland  <joerg@joergland.wohnheim.uni-ulm.de>
+
+	* removed debug messages
+
+	* fixed getgrnam() and getpwnam() functions to correctly escape
+	user input in SQL statements
+

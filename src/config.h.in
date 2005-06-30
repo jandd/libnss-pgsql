@@ -1,0 +1,44 @@
+/* src/config.h.in.  Generated automatically from configure.in by autoheader 2.13.  */
+
+/* Define to empty if the keyword does not work.  */
+#undef const
+
+/* Define if you have the ANSI C header files.  */
+#undef STDC_HEADERS
+
+/* Do you want support for SSL? (--enable-ssl) */
+#undef USE_SSL
+
+/* Avoid SSL routines which used patent-encumbered RC5 algorithms */
+#undef NO_RC5
+
+/* Avoid SSL routines which used patent-encumbered IDEA algorithms */
+#undef NO_IDEA
+
+/* Avoid SSL routines which used patent-encumbered RSA algorithms */
+#undef NO_RSA
+
+/* Define if you have the <dlfcn.h> header file.  */
+#undef HAVE_DLFCN_H
+
+/* Define if you have the <nss.h> header file.  */
+#undef HAVE_NSS_H
+
+/* Define if you have the <unistd.h> header file.  */
+#undef HAVE_UNISTD_H
+
+/* Define if you have the crypto library (-lcrypto).  */
+#undef HAVE_LIBCRYPTO
+
+/* Define if you have the pq library (-lpq).  */
+#undef HAVE_LIBPQ
+
+/* Define if you have the ssl library (-lssl).  */
+#undef HAVE_LIBSSL
+
+/* Name of package */
+#undef PACKAGE
+
+/* Version number of package */
+#undef VERSION
+
