@@ -5,7 +5,7 @@ This is a so called Name Service Switch (NSS) Module for use with glibc.
 With it you can replace /etc/passwd, /etc/shadow, /etc/group etc. with
 a PostgreSQL database. Note that you need another piece of software, a
 plugin to the Pluggable Authentication Modules (PAM) that lets you
-authenticate against this database. It will be available from
+authenticate against this database. It is available from
 
   http://pgfoundry.org/projects/sysauth
 
@@ -17,7 +17,11 @@ client library (libpq, version 7.4 or higher) on your system to use this
 module. Systems tested:
 
  - Gentoo GNU/Linux
- - libpq MUST be compiled with thread-safety
+   libpq MUST be compiled with thread-safety
+ - Debian GNU/Linux 3.0 aka woody
+   just 'apt-get install libnss-pgsql1' from unstable :)
+ - Ubuntu 5.10 Breezy
+   just 'apt-get install libnss-pgsql1' from universe
 
 2. Installation
 -------------------------------------------------------------
@@ -34,7 +38,7 @@ found in the file INSTALL):
 
  - Run configure. My setup looks like this (note the paths):
 
-   ./configure --libdir=/lib --sysconfdir=/etc/nss
+   ./configure --libdir=/lib --sysconfdir=/etc
 
  - If configure doesn't complain about anything, you can type
    'make' to compile the module

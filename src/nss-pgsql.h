@@ -23,18 +23,17 @@
 
 /* define backend connection types */
 #define CONNECTION_SHADOW    's'
-#define CONNECTION_ANY       'x'
 #define CONNECTION_USERGROUP 'n'
 
-int readconfig(char* configfile);
+int readconfig(char type, char* configfile);
 void cleanup(void);
 char *getcfg(const char *key);
 
 int backend_isopen(char type);
 int backend_open(char type);
-void backend_close(void);
+void backend_close(char type);
 enum nss_status getent_prepare(const char *what);
-void getent_close(void);
+void getent_close(char type);
 
 enum nss_status backend_getpwent(struct passwd *result,
 											char *buffer,

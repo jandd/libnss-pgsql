@@ -1,5 +1,5 @@
 /**
- * $Id: backend.c,v 1.11 2005/06/30 02:48:30 mr-russ Exp $
+ * $Id: backend.c,v 1.12 2006/01/09 22:33:07 mr-russ Exp $
  *
  * database backend functions
  *
@@ -11,7 +11,7 @@
  */
 
 #include "nss-pgsql.h"
-#include <libpq-fe.h>
+#include <postgresql/libpq-fe.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -43,21 +43,21 @@
 #define SHADOW_FLAG   8
 
 static PGconn *_conn = NULL;
+static PGconn *_shadowconn = NULL;
 static int _isopen = 0;
-static int _shadow = 0;
+static int _shadowisopen = 0;
 static int _transaction = 0;
+static int _shadowtransaction = 0;
 
 int backend_isopen(char type)
 {
-	if (type == CONNECTION_SHADOW && _shadow == 1) {
-		return (_isopen > 0);
-	} else if (type == CONNECTION_ANY) {
-		// Return value for close query
-		return (_isopen > 0);
-	} else if (type != CONNECTION_SHADOW && _shadow == 0) {
+	if (type == CONNECTION_SHADOW) {
+		return (_shadowisopen > 0);
+	} else if (type != CONNECTION_SHADOW) {
 		return (_isopen > 0);
 	} else {
-		return 0;
+		// Error Should never happen
+		return -1;
 	}
 }
 
@@ -66,24 +66,28 @@ int backend_isopen(char type)
  */
 int backend_open(char type)
 {
-	if (type == CONNECTION_SHADOW && _shadow == 0 && _conn != NULL) {
-		// Need to reconnect to db as different user
-		cleanup();
-	} else if (type != CONNECTION_SHADOW && _shadow == 1 && _conn != NULL) {
-		// Need to reconnect to db as different user
-		cleanup();
-	}
-	
 	if (type == CONNECTION_SHADOW) {
-		_shadow = 1;
+		if (!_shadowisopen) {
+			if (readconfig(CONNECTION_SHADOW, CFGROOTFILE)) {
+				if (_shadowconn != NULL) {
+					PQfinish(_shadowconn);
+				}
+				_shadowconn = PQconnectdb(getcfg("shadowconnectionstring"));
+			}
+
+			if(PQstatus(_shadowconn) == CONNECTION_OK) {
+				++_shadowisopen;
+			} else {
+				print_msg("\nCould not connect to database\n");
+			}
+		}
+		return (_shadowisopen > 0);
 	} else {
-		_shadow = 0;
-	}
-		
-	if(!_isopen) {
-		if ((_shadow && readconfig(CFGROOTFILE)) ||
-			(!_shadow && readconfig(CFGFILE))) {
-			if (_conn == NULL) {
+		if(!_isopen) {
+			if (readconfig(CONNECTION_USERGROUP, CFGFILE)) {
+				if (_conn != NULL) {
+					PQfinish(_conn);
+				}
 				_conn = PQconnectdb(getcfg("connectionstring"));
 			}
 
@@ -93,23 +97,37 @@ int backend_open(char type)
 				print_msg("\nCould not connect to database\n");
 			}
 		}
+		return (_isopen > 0);
 	}
 
-	return (_isopen > 0);
+	// Return 0, code path should never execute but stop gcc complaining
+	return 0;
+	
 }
 
 /*
  * close connection to database and clean up configuration
  */
-void backend_close()
+void backend_close(char type)
 {
-	--_isopen;
-	if(!_isopen) {
-		PQfinish(_conn);
-		_conn = NULL;
-	}
-	if(_isopen < 0) {
-		_isopen = 0;
+	if (type == CONNECTION_SHADOW) {
+		--_shadowisopen;
+		if (!_shadowisopen) {
+			PQfinish(_shadowconn);
+			_shadowconn = NULL;
+		}
+		if(_shadowisopen < 0) {
+			_shadowisopen = 0;
+		}
+	} else {
+		--_isopen;
+		if(!_isopen) {
+			PQfinish(_conn);
+			_conn = NULL;
+		}
+		if(_isopen < 0) {
+			_isopen = 0;
+		}
 	}
 }
 
@@ -122,13 +140,21 @@ inline enum nss_status getent_prepare(const char *what)
 	PGresult *res;
 	ExecStatusType status;
 
-	if (!_transaction++) {
-		PQclear(PQexec(_conn, "BEGIN TRANSACTION"));
-		
-	}
 	asprintf(&stmt, "DECLARE nss_pgsql_internal_%s_curs SCROLL CURSOR FOR "
 	                "%s FOR READ ONLY", what, getcfg(what));
-	res = PQexec(_conn, stmt);
+
+	if (strncmp("shadow", what, 6) == 0) {
+		if (!_shadowtransaction++) {
+			PQclear(PQexec(_shadowconn, "BEGIN TRANSACTION"));
+		}
+		res = PQexec(_shadowconn, stmt);
+	} else {
+		if (!_transaction++) {
+			PQclear(PQexec(_conn, "BEGIN TRANSACTION"));
+		}
+		res = PQexec(_conn, stmt);
+	}
+
 	status = PQresultStatus(res);
 	free(stmt);
 
@@ -142,14 +168,24 @@ inline enum nss_status getent_prepare(const char *what)
 /*
  *  close the transaction used for the cursor
 */
-inline void getent_close()
+inline void getent_close(char type)
 {
-	--_transaction;
-	if (!_transaction) {
-		PQclear(PQexec(_conn, "COMMIT"));
-	}
-	if (_transaction < 0) {
-		_transaction = 0;
+	if (type == CONNECTION_SHADOW) {
+		--_shadowtransaction;
+		if (!_shadowtransaction) {
+			PQclear(PQexec(_shadowconn, "COMMIT"));
+		}
+		if (!_shadowtransaction < 0) {
+			_shadowtransaction = 0;
+		}
+	} else {
+		--_transaction;
+		if (!_transaction) {
+			PQclear(PQexec(_conn, "COMMIT"));
+		}
+		if (_transaction < 0) {
+			_transaction = 0;
+		}
 	}
 }	
 
@@ -357,15 +393,27 @@ PGresult *fetch(char *what)
 	PGresult *res;
 
 	asprintf(&stmt, "FETCH FROM nss_pgsql_internal_%s_curs", what);
-	if(_conn == NULL) {
-		DebugPrint("Did a fetch with the database closed!");
-		return NULL;
+	if (strncmp("shadow", what, 6) == 0) {
+		if (_shadowconn == NULL) {
+			DebugPrint("Did a putback of cursor row with the database closed!");
+			return NULL;
+		}
+		if (PQstatus(_shadowconn) != CONNECTION_OK) {
+			DebugPrint("oops! die connection is futsch");
+			return NULL;
+		}
+		res = PQexec(_shadowconn, stmt);
+	} else {
+		if(_conn == NULL) {
+			DebugPrint("Did a fetch with the database closed!");
+			return NULL;
+		}
+		if(PQstatus(_conn) != CONNECTION_OK) {
+			DebugPrint("oops! die connection is futsch");
+			return NULL;
+		}
+		res = PQexec(_conn, stmt);
 	}
-	if(PQstatus(_conn) != CONNECTION_OK) {
-		DebugPrint("oops! die connection is futsch");
-		return NULL;
-	}
-	res = PQexec(_conn, stmt);
 	free(stmt);
 
 	return res;
@@ -381,17 +429,29 @@ PGresult *putback(char *what)
 	PGresult *res;
 
 	asprintf(&stmt, "MOVE BACKWARD 1 IN nss_pgsql_internal_%s_curs", what);
-	if(_conn == NULL) {
-		DebugPrint("Did a putback of cursor row with the database closed!");
-		return NULL;
+	if (strncmp("shadow", what, 6) == 0) {
+		if (_shadowconn == NULL) {
+			DebugPrint("Did a putback of cursor row with the database closed!");
+			return NULL;
+		}
+		if (PQstatus(_shadowconn) != CONNECTION_OK) {
+			DebugPrint("oops! die connection is futsch");
+			return NULL;
+		}
+		res = PQexec(_shadowconn, stmt);
+	} else {
+		if(_conn == NULL) {
+			DebugPrint("Did a putback of cursor row with the database closed!");
+			return NULL;
+		}
+		if(PQstatus(_conn) != CONNECTION_OK) {
+			DebugPrint("oops! die connection is futsch");
+			return NULL;
+		}
+		res = PQexec(_conn, stmt);
 	}
-	if(PQstatus(_conn) != CONNECTION_OK) {
-		DebugPrint("oops! die connection is futsch");
-		return NULL;
-	}
-	res = PQexec(_conn, stmt);
 	free(stmt);
-	
+		
 	return res;
 }
 
@@ -673,7 +733,7 @@ enum nss_status backend_getspnam(const char *name, struct spwd *result,
 
 	params[0] = name;
 
-	res = PQexecParams(_conn, getcfg("shadowbyname"), 1, NULL, params, NULL, NULL, 0);
+	res = PQexecParams(_shadowconn, getcfg("shadowbyname"), 1, NULL, params, NULL, NULL, 0);
 
 	if(PQresultStatus(res) == PGRES_TUPLES_OK) {
 		status = res2shadow(res, result, buffer, buflen, errnop);

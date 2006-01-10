@@ -1,3 +1,16 @@
+2006-01-10	Russell Smith <mr-russ@pws.com.au>
+	* Merged all changes with the debian project that are known. Version
+	number is updated to be larger than all current versions of this
+	module.
+
+	* Fixed bug where if you used getpwent, then getspnam, then getpwent
+	you would end up hanging the application (common perl operation)
+	
+	* Update autoconf to the best of my ability, which is relatively new
+	to me.
+
+	* New Version: 1.4.0
+
 2005-06-30	Russell Smith <mr-russ@pws.com.au>
 	* Fixed another bug where a group did not appear to exist unless it
 	had members.

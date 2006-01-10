@@ -1,5 +1,5 @@
 /**
- * $Id: interface.c,v 1.5 2005/05/14 09:52:02 mr-russ Exp $
+ * $Id: interface.c,v 1.6 2006/01/09 22:33:07 mr-russ Exp $
  *
  * public interface to libc
  *
@@ -39,8 +39,8 @@ enum nss_status
 _nss_pgsql_endpwent(void)
 {
 	__libc_lock_lock(lock);
-	getent_close();
-	backend_close();
+	getent_close(CONNECTION_USERGROUP);
+	backend_close(CONNECTION_USERGROUP);
 	__libc_lock_unlock(lock);
 
 	return NSS_STATUS_SUCCESS;
@@ -77,7 +77,7 @@ _nss_pgsql_getpwnam_r(const char *pwnam, struct passwd *result,
 	if(backend_open(CONNECTION_USERGROUP)) {
 		retval = backend_getpwnam(pwnam, result, buffer, buflen, errnop);
 	}
-	backend_close();
+	backend_close(CONNECTION_USERGROUP);
 	__libc_lock_unlock(lock);
 
 	return retval;
@@ -93,7 +93,7 @@ _nss_pgsql_getpwuid_r(uid_t uid, struct passwd *result, char *buffer,
 	if(backend_open(CONNECTION_USERGROUP)) {
 		retval = backend_getpwuid(uid, result, buffer, buflen, errnop);
 	}
-	backend_close();
+	backend_close(CONNECTION_USERGROUP);
 	__libc_lock_unlock(lock);
 
 	return retval;
@@ -121,8 +121,8 @@ enum nss_status
 _nss_pgsql_endgrent(void)
 {
 	__libc_lock_lock(lock);
-	getent_close();
-	backend_close();
+	getent_close(CONNECTION_USERGROUP);
+	backend_close(CONNECTION_USERGROUP);
 	__libc_lock_unlock(lock);
 
 	return NSS_STATUS_SUCCESS;
@@ -159,7 +159,7 @@ _nss_pgsql_getgrnam_r(const char *grnam, struct group *result,
 	if(backend_open(CONNECTION_USERGROUP)) {
 		retval = backend_getgrnam(grnam, result, buffer, buflen, errnop);
 	} 
-	backend_close();
+	backend_close(CONNECTION_USERGROUP);
 	__libc_lock_unlock(lock);
 
 	return retval;
@@ -175,7 +175,7 @@ _nss_pgsql_getgrgid_r(uid_t gid, struct group *result,
 	if(backend_open(CONNECTION_USERGROUP)) {
 		retval = backend_getgrgid(gid, result, buffer, buflen, errnop);
 	}
-	backend_close();
+	backend_close(CONNECTION_USERGROUP);
 	__libc_lock_unlock(lock);
 
 	return retval;
@@ -195,7 +195,7 @@ _nss_pgsql_initgroups_dyn(const char *user, gid_t group, long int *start,
 		                                   limit, errnop);
 		retval = (numgroups > 0) ? NSS_STATUS_SUCCESS : NSS_STATUS_NOTFOUND;
 	}
-	backend_close();
+	backend_close(CONNECTION_USERGROUP);
 	__libc_lock_unlock(lock);
 
 	return retval;
@@ -223,8 +223,8 @@ enum nss_status
 _nss_pgsql_endspent(void)
 {
 	__libc_lock_lock(lock);
-	getent_close();
-	backend_close();
+	getent_close(CONNECTION_SHADOW);
+	backend_close(CONNECTION_SHADOW);
 	__libc_lock_unlock(lock);
 
 	return NSS_STATUS_SUCCESS;
@@ -262,7 +262,7 @@ _nss_pgsql_getspnam_r(const char *spnam, struct spwd *result,
 	if(backend_open(CONNECTION_SHADOW)) {
 		retval = backend_getspnam(spnam, result, buffer, buflen, errnop);
 	}
-	backend_close();
+	backend_close(CONNECTION_SHADOW);
 	__libc_lock_unlock(lock);
 
 	return retval;

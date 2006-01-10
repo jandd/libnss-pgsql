@@ -1,4 +1,4 @@
-%define ver	1.1.0
+%define ver	1.4.0
 %define rel 1
 %define prefix /usr
 %define sysconfdir /etc
@@ -10,13 +10,13 @@ Release: %rel
 Copyright: GPL 2.0
 Group: System Environment/Libraries
 Source: libnss-pgsql-%{PACKAGE_VERSION}.tar.gz
-URL: http://www.sourceforge.net/projects/sysauth-pgsql
+URL: http://www.pgfoundry.org/projects/sysauth/
 BuildRoot: /tmp/libnss-pgsql-%{PACKAGE_VERSION}-build
 Packager: Bret Mogilefsky <mogul-sysauth-pgsql@gelatinous.com>
 
 %description
 libnss-pgsql is a name service switch module that allows the 
-replacement of flatfile passwd and group lookups with a 
+replacement of flatfile passwd, group and shadow lookups with a 
 PostgreSQL backend.
 
 %prep

@@ -1,5 +1,5 @@
 /**
- * $Id: config.c,v 1.5 2005/05/14 09:52:02 mr-russ Exp $
+ * $Id: config.c,v 1.6 2006/01/09 22:33:07 mr-russ Exp $
  *
  * configfile parser
  *
@@ -18,7 +18,9 @@
 #define CFGLINEMAX 512
 
 static char *_options[HASHMAX];
+static char *_shadowoptions[HASHMAX];
 static unsigned int _confisopen = 0;
+static unsigned int _shadowconfisopen = 0;
 
 unsigned int texthash(const char *str);
 
@@ -40,27 +42,41 @@ unsigned int texthash(const char *str)
 /*
  * read configfile and save values in hashtable
  */
-int readconfig(char* configfile)
+int readconfig(char type, char* configfile)
 {
 	FILE *cf;
 	char line[CFGLINEMAX], key[CFGLINEMAX], val[CFGLINEMAX], *c;
 	unsigned int h;
 	unsigned int lineno = 0;
 
-	if(_confisopen) {
-		for(h = 0; h < HASHMAX; h++) {
-			free(_options[h]);
+	// Choose whether we are dealing with the shadow section or not
+	if (type == CONNECTION_SHADOW) {
+		if (_shadowconfisopen) {
+			for(h = 0; h < HASHMAX; h++) {
+				free(_shadowoptions[h]);
+			}
+		}
+		h = 0;
+		while(h < HASHMAX) {
+			_shadowoptions[h] = NULL;
+			++h;
+		}
+	} else {
+		if(_confisopen) {
+			for(h = 0; h < HASHMAX; h++) {
+				free(_options[h]);
+			}
+		}
+		h = 0;
+		while(h < HASHMAX) {
+			_options[h] = NULL;
+			++h;
 		}
 	}
 
 	if(!(cf = fopen(configfile, "r"))) {
 		DebugPrint("could not open config file  %s\n" _C_ configfile);
 		return 0;
-	}
-	h = 0;
-	while(h < HASHMAX) {
-		_options[h] = NULL;
-		++h;
 	}
 
 	while(fgets(line, CFGLINEMAX, cf)) {
@@ -80,17 +96,30 @@ int readconfig(char* configfile)
 			print_err("line %d in %s is unparseable: \"%s\"\n", lineno, configfile, line);
 		} else {
 			h = texthash(key);
-			if (_options[h] != NULL ) {
-				print_err("line %d in %s is a duplicate hash: \"%s\"\n", lineno, configfile, key);
+			if (type == CONNECTION_SHADOW) {
+				if (_shadowoptions[h] != NULL) {
+					print_err("line %d in %s is a duplicate hash: \"%s\"\n", lineno, configfile, key);
+				} else {
+					_shadowoptions[h] = malloc(strlen(val)+1);
+					strcpy(_shadowoptions[h], val);
+				}
 			} else {
-				_options[h] = malloc(strlen(val)+1);
-				strcpy(_options[h], val);
+				if (_options[h] != NULL ) {
+					print_err("line %d in %s is a duplicate hash: \"%s\"\n", lineno, configfile, key);
+				} else {
+					_options[h] = malloc(strlen(val)+1);
+					strcpy(_options[h], val);
+				}
 			}
 		}
 	}
 	fclose(cf);
 
-	_confisopen = 1;
+	if (type == CONNECTION_SHADOW) {
+		_shadowconfisopen = 1;
+	} else {
+		_confisopen = 1;
+	}
 	atexit(cleanup);
 
 	return 1;
@@ -110,8 +139,18 @@ void cleanup(void)
 	}
 	_confisopen = 0;
 
-	while(backend_isopen(CONNECTION_ANY)) {
-		backend_close();
+	if(_shadowconfisopen) {
+		for(i = 0; i < HASHMAX; i++) {
+			free(_shadowoptions[i]);
+		}
+	}
+	_shadowconfisopen = 0;
+
+	while(backend_isopen(CONNECTION_SHADOW)) {
+		backend_close(CONNECTION_SHADOW);
+	}
+	while(backend_isopen(CONNECTION_USERGROUP)) {
+		backend_close(CONNECTION_USERGROUP);
 	}
 }
 
@@ -121,5 +160,9 @@ void cleanup(void)
  */
 inline char *getcfg(const char *key)
 {
-	return _options[texthash(key)] ? _options[texthash(key)] : "";
+	if (strncmp("shadow", key, 6) == 0) {
+		return _shadowoptions[texthash(key)] ? _shadowoptions[texthash(key)] : "";
+	} else {
+		return _options[texthash(key)] ? _options[texthash(key)] : "";
+	}
 }
