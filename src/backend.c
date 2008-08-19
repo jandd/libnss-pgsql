@@ -1,5 +1,5 @@
 /**
- * $Id: backend.c,v 1.12 2006/01/09 22:33:07 mr-russ Exp $
+ * $Id: backend.c,v 1.13 2008/08/19 09:44:37 mr-russ Exp $
  *
  * database backend functions
  *
@@ -23,6 +23,9 @@
 #define GROUP_NAME   0
 #define GROUP_PASSWD 1
 #define GROUP_GID    2
+#define GROUP_MEMBERS 3
+/* define the number of columns in result if group members are included */
+#define GROUP_HAS_MEMBERS 4
 /* define passwd column names */
 #define PASSWD_NAME   0
 #define PASSWD_PASSWD 1
@@ -66,25 +69,33 @@ int backend_isopen(char type)
  */
 int backend_open(char type)
 {
+	int config;
+
 	if (type == CONNECTION_SHADOW) {
 		if (!_shadowisopen) {
-			if (readconfig(CONNECTION_SHADOW, CFGROOTFILE)) {
+			/*
+			 * If readconfig fails, we don't display a message as shadow
+			 * can't be read by non root users.
+			 */
+			config = readconfig(CONNECTION_SHADOW, CFGROOTFILE);
+			if (config == 0) {
 				if (_shadowconn != NULL) {
 					PQfinish(_shadowconn);
 				}
 				_shadowconn = PQconnectdb(getcfg("shadowconnectionstring"));
-			}
-
-			if(PQstatus(_shadowconn) == CONNECTION_OK) {
-				++_shadowisopen;
-			} else {
-				print_msg("\nCould not connect to database\n");
+			
+				if(PQstatus(_shadowconn) == CONNECTION_OK) {
+					++_shadowisopen;
+				} else {
+					print_msg("\nCould not connect to database (shadow)\n");
+				}
 			}
 		}
 		return (_shadowisopen > 0);
 	} else {
 		if(!_isopen) {
-			if (readconfig(CONNECTION_USERGROUP, CFGFILE)) {
+			config = readconfig(CONNECTION_USERGROUP, CFGFILE);
+			if (config == 0) {
 				if (_conn != NULL) {
 					PQfinish(_conn);
 				}
@@ -202,8 +213,22 @@ copy_attr_colnum(PGresult *res, int attrib_number, char **valptr,
 	size_t slen;
 
 	sptr = PQgetvalue(res, row, attrib_number);
+	return copy_attr_string(sptr, valptr, buffer, buflen, errnop);
+}
+
+/*
+  With apologies to nss_ldap...
+  Assign a single value to *valptr from the specified row in the result
+*/
+enum nss_status
+copy_attr_string(char *sptr, char **valptr,
+                 char **buffer, size_t *buflen, int *errnop)
+{
+
+	size_t slen;
+
 	slen = strlen(sptr);
-	if(*buflen < slen+1) {
+	if(*buflen < slen + 1) {
 		*errnop = ERANGE;
 		return NSS_STATUS_TRYAGAIN;
 	}
@@ -217,7 +242,6 @@ copy_attr_colnum(PGresult *res, int attrib_number, char **valptr,
 
 	return NSS_STATUS_SUCCESS;
 }
-
 
 /*
  * return array of strings containing usernames that are member of group with gid 'gid'
@@ -290,6 +314,97 @@ enum nss_status getgroupmem(gid_t gid,
 }
 
 /*
+ * return array of strings containing usernames that are member of group with gid 'gid'
+ */
+enum nss_status getgroupmemfromquery(PGresult *res, struct group *result,
+                            char *buffer,
+                            size_t buflen, int *errnop)
+{
+	char** memberarray;
+	char *groupmemberlist;
+	int groupmemberlength;
+	int nomembers;
+	int i;
+	int t;
+	int start;
+	size_t ptrsize;
+	enum nss_status status = NSS_STATUS_NOTFOUND;
+
+	groupmemberlength = strlen(PQgetvalue(res, 0, GROUP_MEMBERS));
+	// If we don't have at least groupmemberlength space, we aren't going
+	// to fit the result in.  Bail out early to reduce processing overhead
+	if (buflen < groupmemberlength) {
+		status = NSS_STATUS_TRYAGAIN;
+		*errnop = ERANGE;
+		goto BAIL_OUT;
+	}
+
+
+	groupmemberlist = PQgetvalue(res, 0, GROUP_MEMBERS);
+
+	// It's not possible to have more members than the length of the array, so make it
+	// that big to be safe
+	memberarray = malloc(sizeof(char**) * groupmemberlength);
+
+
+	// Find the number of group members and split the string into an array
+	i = 0;
+	nomembers = 0;
+	start = 0;
+	while (i < groupmemberlength) {
+		if (groupmemberlist[i] == '\n') {
+			memberarray[nomembers] = &(groupmemberlist[start]);
+			++nomembers;
+			groupmemberlist[i] = '\0';
+			start = i + 1;
+		}
+		++i;
+	}
+
+	// There was at least one character, we have to add a member
+	// 'a,b' => 2, '' => 0, 'a' => 1
+	if (i > 0) {
+		memberarray[nomembers] = &(groupmemberlist[start]);
+		++nomembers;
+	}
+
+	// Make sure there's enough room for the array of pointers to group member names
+	ptrsize = (nomembers+1) * sizeof(const char *);
+	if (buflen < ptrsize) {
+		status = NSS_STATUS_TRYAGAIN;
+		*errnop = ERANGE;
+		goto BAIL_OUT;
+	}
+
+	/* realign the buffer on a 4-byte boundary */
+	buflen -= 4-((long)buffer & 0x3);
+	buffer += 4-((long)buffer & 0x3);
+
+	result->gr_mem = (char**)buffer;
+
+	buffer += (ptrsize+3)&(~0x3);
+	buflen -= (ptrsize+3)&(~0x3);
+
+	for(i = 0; i < nomembers; ++i) {
+		status = copy_attr_string(memberarray[i], &(result->gr_mem[i]), &buffer, &buflen, errnop);
+		if(status != NSS_STATUS_SUCCESS) goto BAIL_OUT;
+	}
+
+	// If the group has no members, there was still success
+	if (nomembers == 0) {
+		*errnop = 0;
+		status = NSS_STATUS_SUCCESS;
+	}
+	result->gr_mem[nomembers] = NULL;
+	free(memberarray);
+	
+ BAIL_OUT:
+
+
+	return status;
+}
+
+/*
  * 'convert' a PGresult to struct group
  */
 enum nss_status res2grp(PGresult *res,
@@ -299,7 +414,7 @@ enum nss_status res2grp(PGresult *res,
 {
 	enum nss_status status = NSS_STATUS_NOTFOUND;
 #ifdef DEBUG
-	char **i;
+	char **c;
 #endif
 
 	if(!PQntuples(res)) {
@@ -316,7 +431,13 @@ enum nss_status res2grp(PGresult *res,
 
 	result->gr_gid = (gid_t)strtoul(PQgetvalue(res, 0, GROUP_GID), (char**)NULL, 10);
 
-	status = getgroupmem(result->gr_gid, result, buffer, buflen, errnop);
+	// If we have included the group members in this query, don't use the extended
+	// getgroupmem but use getgroupmemfromquery to find out the group members
+	if (PQnfields(res) != GROUP_HAS_MEMBERS) {
+		status = getgroupmem(result->gr_gid, result, buffer, buflen, errnop);
+	} else {
+		status = getgroupmemfromquery(res, result, buffer, buflen, errnop);
+	}
 
 #ifdef DEBUG
 	if (status == NSS_STATUS_SUCCESS) {
@@ -325,9 +446,9 @@ enum nss_status res2grp(PGresult *res,
 		DebugPrint("Name: %s, " _C_ result->gr_name);
 		DebugPrint("Password: %s, " _C_ result->gr_passwd);
 		DebugPrint("Member:");
-		i = result->gr_mem;
-		while(*i) {
-			DebugPrint("%s, " _C_ *i++);
+		c = result->gr_mem;
+		while(*c) {
+			DebugPrint("%s, " _C_ *c++);
 		}
 		DebugPrint("\n");
 	}

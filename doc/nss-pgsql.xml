@@ -275,6 +275,12 @@ STATEMENT := KEYWORD '=' &lt;value&gt;
       </varlistentry>
 	  
       <varlistentry>
+	<term>shadowconnectionstring</term>
+	<listitem>
+	  <para>The connection string to connect to the server for shadow connections. You can include any valid PostgreSQL options.</para>
+	</listitem>
+      </varlistentry>
+      <varlistentry>
 	<term>shadowbyname</term>
 	<listitem>
 	  <para>A query returning shadow_name, shadow_passwd, shadow_lstchg, shadow_min, shadow_max, shadow_warn, shadow_inact, shadow_expire, shadow_flag
@@ -400,7 +406,7 @@ connectionstring        = hostaddr=127.0.0.1 dbname=unix user=postgres password=
 # you can use anything postgres accepts as table expression
 
 # Must return "usernames", 1 column, list
-getgroupmembersbygid    = SELECT username FROM passwd_table WHERE gid = $1
+getgroupmembersbygid    = SELECT username FROM group_table WHERE gid = $1
 # Must return passwd_name, passwd_passwd, passwd_gecos, passwd_dir, passwd_shell, passwd_uid, passwd_gid
 getpwnam        = SELECT username, passwd, gecos, homedir, shell, uid, gid FROM passwd_table WHERE username = $1
 # Must return passwd_name, passwd_passwd, passwd_gecos, passwd_dir, passwd_shell, passwd_uid, passwd_gid
@@ -419,7 +425,7 @@ allgroups       = SELECT groupname, passwd, gid  FROM group_table
 # example configfile for PostgreSQL NSS module
 # this file must be readable for root only
 
-connectionstring        = hostaddr=127.0.0.1 dbname=unix user=postgres connect_timeout=1
+shadowconnectionstring        = hostaddr=127.0.0.1 dbname=unix user=postgres connect_timeout=1
 
 #Query in the following format
 #shadow_name, shadow_passwd, shadow_lstchg, shadow_min, shadow_max, shadow_warn, shadow_inact, shadow_expire, shadow_flag

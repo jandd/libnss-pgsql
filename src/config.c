@@ -1,5 +1,5 @@
 /**
- * $Id: config.c,v 1.6 2006/01/09 22:33:07 mr-russ Exp $
+ * $Id: config.c,v 1.7 2008/08/19 09:44:37 mr-russ Exp $
  *
  * configfile parser
  *
@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
 #include "nss-pgsql.h"
 
 #define HASHMAX 73
@@ -76,7 +77,7 @@ int readconfig(char type, char* configfile)
 
 	if(!(cf = fopen(configfile, "r"))) {
 		DebugPrint("could not open config file  %s\n" _C_ configfile);
-		return 0;
+		return errno;
 	}
 
 	while(fgets(line, CFGLINEMAX, cf)) {
@@ -122,7 +123,7 @@ int readconfig(char type, char* configfile)
 	}
 	atexit(cleanup);
 
-	return 1;
+	return 0;
 }
 
 /*
@@ -135,6 +136,7 @@ void cleanup(void)
 	if(_confisopen) {
 		for(i = 0; i < HASHMAX; i++) {
 			free(_options[i]);
+			_options[i] = NULL;
 		}
 	}
 	_confisopen = 0;
@@ -142,6 +144,7 @@ void cleanup(void)
 	if(_shadowconfisopen) {
 		for(i = 0; i < HASHMAX; i++) {
 			free(_shadowoptions[i]);
+			_shadowoptions[i] = NULL;
 		}
 	}
 	_shadowconfisopen = 0;

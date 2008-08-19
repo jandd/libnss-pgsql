@@ -1,3 +1,18 @@
+2007-07-22	Russell Smith <mr-russ@pws.com.au>
+	* Produced a new example SQL file based on testing.  This new file
+	also fixes bugs in the examples of the previous file.
+
+	* Use local error pointer to avoid invalid return values
+	PQgetvalue() would overwrite the global valid incorrectly
+
+	* Add alternative getgroupfromquery option to speedup return of
+	group members and reduce the number of database queries on getgrent
+
+2007-04-26	Russell Smith <mr-russ@pws.com.au>
+	* Merged further changes from debian bug reports
+
+	* Update documentation for SSL problems
+
 2006-01-10	Russell Smith <mr-russ@pws.com.au>
 	* Merged all changes with the debian project that are known. Version
 	number is updated to be larger than all current versions of this
