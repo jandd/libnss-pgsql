@@ -10,12 +10,13 @@
  *
  */
 
+#define _GNU_SOURCE
 #include "nss-pgsql.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
 
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
 /*
  * passwd functions
